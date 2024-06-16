@@ -23,6 +23,15 @@ variable "create_instance" {
   default     = false
 }
 
+variable "user_tags" {
+  description = "User-provided tags for resources."
+  type        = map(string)
+  default     = {
+    "Name" = "default-name"
+    "Environment" = "default-env"
+  }
+}
+
 variable "vpc-cidr-block" {
   type        = string
   default     = "10.0.0.0/16"
@@ -87,6 +96,17 @@ resource "aws_internet_gateway" "main" {
   tags = {
     Name = "k8s-igw"
   }
+}
+
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.terraform-eks-eip.id
+  subnet_id     = aws_subnet.terraform-eks-public-subnet[0].id
+
+  tags = merge({
+    Name = "${var.cluster-name}-nat"
+  }, var.user_tags)
+
+  depends_on = [aws_internet_gateway.main]
 }
 
 # Public Subnets
