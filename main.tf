@@ -84,38 +84,37 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = merge({
-    Name = "k8s-vpc"
-  }, var.user_tags)
+  tags = {
+    Name = "${var.user_tags}-main-vpc"
+  }
 }
 
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
-  tags = merge({
-    Name = "k8s-igw"
-  }, var.user_tags)
+  tags = {
+    Name = "${var.user_tags}-main-igw"
+  }
 }
 
 # Elastic IP for NAT Gateway
-resource "aws_eip" "terraform-eks-eip" {
+resource "aws_eip" "nat_eip" {
   vpc = true
 
-  tags = merge({
-    Name = "k8s-eip"
-  }, var.user_tags)
+  tags = {
+    Name = "${var.user_tags}-nat-eip"
+  }
 }
 
 # NAT Gateway
 resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.terraform-eks-eip.id
+  allocation_id = aws_eip.nat_eip.id
   subnet_id     = aws_subnet.public[0].id
 
-  tags = merge({
-    Name = "k8s-nat"
-  }, var.user_tags)
-
+  tags = {
+    Name = "${var.user_tags}-main-nat"
+  }
   depends_on = [aws_internet_gateway.main]
 }
 
@@ -127,9 +126,9 @@ resource "aws_subnet" "public" {
   availability_zone       = element(var.availability-zones, count.index)
   map_public_ip_on_launch = true
 
-  tags = merge({
-    Name = "k8s-public-subnet-${count.index}"
-  }, var.user_tags)
+  tags = {
+    Name = "${var.user_tags}-public-subnet-${count.index}"
+  }
 }
 
 # Private Subnets (App)
@@ -139,9 +138,9 @@ resource "aws_subnet" "private_app" {
   cidr_block        = element(var.private-subnet-cidr-blocks-app, count.index)
   availability_zone = element(var.availability-zones, count.index)
 
-  tags = merge({
-    Name = "k8s-private-app-subnet-${count.index}"
-  }, var.user_tags)
+  tags = {
+    Name = "${var.user_tags}-private-app-subnet-${count.index}"
+  }
 }
 
 # Private Subnets (DB)
@@ -151,9 +150,9 @@ resource "aws_subnet" "private_db" {
   cidr_block        = element(var.private-subnet-cidr-blocks-db, count.index)
   availability_zone = element(var.availability-zones, count.index)
 
-  tags = merge({
-    Name = "k8s-private-db-subnet-${count.index}"
-  }, var.user_tags)
+  tags = {
+    Name = "${var.user_tags}-private-db-subnet-${count.index}"
+  }
 }
 
 # Route Tables and Associations
@@ -165,9 +164,9 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.main.id
   }
 
-  tags = merge({
-    Name = "k8s-public-rt"
-  }, var.user_tags)
+  tags = {
+    Name = "${var.user_tags}-public-rt"
+  }
 }
 
 resource "aws_route_table_association" "public" {
@@ -184,9 +183,9 @@ resource "aws_route_table" "private" {
     nat_gateway_id = aws_nat_gateway.main.id
   }
 
-  tags = merge({
-    Name = "k8s-private-rt"
-  }, var.user_tags)
+  tags = {
+    Name = "${var.user_tags}-private-rt"
+  }
 }
 
 resource "aws_route_table_association" "private_app" {
@@ -226,9 +225,9 @@ resource "aws_security_group" "public" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge({
-    Name = "k8s-public-sg"
-  }, var.user_tags)
+  tags = {
+    Name = "${var.user_tags}-public-sg"
+  }
 }
 
 resource "aws_security_group" "private" {
@@ -248,9 +247,9 @@ resource "aws_security_group" "private" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge({
-    Name = "k8s-private-sg"
-  }, var.user_tags)
+  tags = {
+    Name = "${var.user_tags}-private-sg"
+  }
 }
 
 # EC2 Instances for Kubernetes Master
@@ -262,9 +261,9 @@ resource "aws_instance" "master" {
   subnet_id       = element(aws_subnet.public[*].id, 0)
   security_groups = [aws_security_group.public.name]
 
-  tags = merge({
-    Name = "k8s-master"
-  }, var.user_tags)
+  tags = {
+    Name = "${var.user_tags}-master"
+  }
 
   user_data = <<-EOF
               #!/bin/bash
@@ -294,9 +293,9 @@ resource "aws_instance" "worker" {
   subnet_id       = element(aws_subnet.private_app[*].id, count.index)
   security_groups = [aws_security_group.private.name]
 
-  tags = merge({
-    Name = "k8s-worker-${count.index}"
-  }, var.user_tags)
+  tags = {
+    Name = "${var.user_tags}-worker-${count.index}"
+  }
 
   user_data = <<-EOF
               #!/bin/bash
