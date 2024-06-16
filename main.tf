@@ -27,7 +27,7 @@ variable "user_tags" {
   description = "User-provided tags for resources."
   type        = map(string)
   default     = {
-    "Name" = "default-name"
+    "Name"        = "default-name"
     "Environment" = "default-env"
   }
 }
@@ -84,26 +84,36 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = {
+  tags = merge({
     Name = "k8s-vpc"
-  }
+  }, var.user_tags)
 }
 
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
-  tags = {
+  tags = merge({
     Name = "k8s-igw"
-  }
+  }, var.user_tags)
 }
 
-resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.terraform-eks-eip.id
-  subnet_id     = aws_subnet.terraform-eks-public-subnet[0].id
+# Elastic IP for NAT Gateway
+resource "aws_eip" "terraform-eks-eip" {
+  vpc = true
 
   tags = merge({
-    Name = "${var.cluster-name}-nat"
+    Name = "k8s-eip"
+  }, var.user_tags)
+}
+
+# NAT Gateway
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.terraform-eks-eip.id
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = merge({
+    Name = "k8s-nat"
   }, var.user_tags)
 
   depends_on = [aws_internet_gateway.main]
@@ -111,15 +121,15 @@ resource "aws_nat_gateway" "main" {
 
 # Public Subnets
 resource "aws_subnet" "public" {
-  count             = length(var.public-subnet-cidr-blocks)
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = element(var.public-subnet-cidr-blocks, count.index)
-  availability_zone = element(var.availability-zones, count.index)
+  count                   = length(var.public-subnet-cidr-blocks)
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = element(var.public-subnet-cidr-blocks, count.index)
+  availability_zone       = element(var.availability-zones, count.index)
   map_public_ip_on_launch = true
 
-  tags = {
+  tags = merge({
     Name = "k8s-public-subnet-${count.index}"
-  }
+  }, var.user_tags)
 }
 
 # Private Subnets (App)
@@ -129,9 +139,9 @@ resource "aws_subnet" "private_app" {
   cidr_block        = element(var.private-subnet-cidr-blocks-app, count.index)
   availability_zone = element(var.availability-zones, count.index)
 
-  tags = {
+  tags = merge({
     Name = "k8s-private-app-subnet-${count.index}"
-  }
+  }, var.user_tags)
 }
 
 # Private Subnets (DB)
@@ -141,9 +151,9 @@ resource "aws_subnet" "private_db" {
   cidr_block        = element(var.private-subnet-cidr-blocks-db, count.index)
   availability_zone = element(var.availability-zones, count.index)
 
-  tags = {
+  tags = merge({
     Name = "k8s-private-db-subnet-${count.index}"
-  }
+  }, var.user_tags)
 }
 
 # Route Tables and Associations
@@ -155,15 +165,40 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.main.id
   }
 
-  tags = {
+  tags = merge({
     Name = "k8s-public-rt"
-  }
+  }, var.user_tags)
 }
 
 resource "aws_route_table_association" "public" {
   count          = length(var.public-subnet-cidr-blocks)
   subnet_id      = element(aws_subnet.public[*].id, count.index)
   route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id
+  }
+
+  tags = merge({
+    Name = "k8s-private-rt"
+  }, var.user_tags)
+}
+
+resource "aws_route_table_association" "private_app" {
+  count          = length(var.private-subnet-cidr-blocks-app)
+  subnet_id      = element(aws_subnet.private_app[*].id, count.index)
+  route_table_id = aws_route_table.private.id
+}
+
+resource "aws_route_table_association" "private_db" {
+  count          = length(var.private-subnet-cidr-blocks-db)
+  subnet_id      = element(aws_subnet.private_db[*].id, count.index)
+  route_table_id = aws_route_table.private.id
 }
 
 # Security Groups
@@ -191,9 +226,9 @@ resource "aws_security_group" "public" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
+  tags = merge({
     Name = "k8s-public-sg"
-  }
+  }, var.user_tags)
 }
 
 resource "aws_security_group" "private" {
@@ -213,23 +248,23 @@ resource "aws_security_group" "private" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
+  tags = merge({
     Name = "k8s-private-sg"
-  }
+  }, var.user_tags)
 }
 
 # EC2 Instances for Kubernetes Master
 resource "aws_instance" "master" {
-  count                  = var.create_instance ? 1 : 0
-  ami                    = var.ami_id
-  instance_type          = var.instance_type
-  key_name               = var.key_name
-  subnet_id              = element(aws_subnet.public[*].id, 0)
-  security_groups        = [aws_security_group.public.name]
+  count           = var.create_instance ? 1 : 0
+  ami             = var.ami_id
+  instance_type   = var.instance_type
+  key_name        = var.key_name
+  subnet_id       = element(aws_subnet.public[*].id, 0)
+  security_groups = [aws_security_group.public.name]
 
-  tags = {
+  tags = merge({
     Name = "k8s-master"
-  }
+  }, var.user_tags)
 
   user_data = <<-EOF
               #!/bin/bash
@@ -252,16 +287,16 @@ resource "aws_instance" "master" {
 
 # EC2 Instances for Kubernetes Workers
 resource "aws_instance" "worker" {
-  count                  = var.create_instance ? 1 : 0
-  ami                    = var.ami_id
-  instance_type          = var.instance_type
-  key_name               = var.key_name
-  subnet_id              = element(aws_subnet.private_app[*].id, count.index)
-  security_groups        = [aws_security_group.private.name]
+  count           = var.create_instance ? 1 : 0
+  ami             = var.ami_id
+  instance_type   = var.instance_type
+  key_name        = var.key_name
+  subnet_id       = element(aws_subnet.private_app[*].id, count.index)
+  security_groups = [aws_security_group.private.name]
 
-  tags = {
+  tags = merge({
     Name = "k8s-worker-${count.index}"
-  }
+  }, var.user_tags)
 
   user_data = <<-EOF
               #!/bin/bash
