@@ -24,10 +24,17 @@ variable "create_instance" {
 }
 
 variable "user_tags" {
+  description = "User-provided tags for resource name."
+  default     = {
+    "Name"        = "default-name"   
+  }
+}
+
+variable "resource_tags" {
   description = "User-provided tags for resources."
   type        = map(string)
   default     = {
-    "Name"        = "default-name"
+    "Key"        = "default-name"
     "Environment" = "default-env"
   }
 }
