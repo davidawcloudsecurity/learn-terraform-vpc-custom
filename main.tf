@@ -258,7 +258,7 @@ resource "aws_instance" "worker" {
 
 # Outputs
 output "master_public_ip" {
-  value = aws_instance.master.public_ip
+  value = aws_instance.master[count.index].public_ip
 }
 
 output "worker_private_ips" {
