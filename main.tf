@@ -8,14 +8,21 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 3.0"
     }
-    kubectl = {
-      source  = "gavinbunney/kubectl"
-      version = ">= 1.7.0"
-    }
   }
 }
 
 # Variables
+variable "region" {
+  type    = string
+  default = "us-east-1"
+}
+
+variable "create_instance" {
+  description = "Flag to create the instance"
+  type        = bool
+  default     = false
+}
+
 variable "vpc-cidr-block" {
   type        = string
   default     = "10.0.0.0/16"
@@ -31,66 +38,35 @@ variable "public-subnet-cidr-blocks" {
 variable "private-subnet-cidr-blocks-app" {
   type        = list(string)
   default     = ["10.0.3.0/24", "10.0.4.0/24"]
-  description = "CIDR block range for private app subnets"
+  description = "CIDR block range for private subnets for app"
 }
 
 variable "private-subnet-cidr-blocks-db" {
   type        = list(string)
   default     = ["10.0.5.0/24", "10.0.6.0/24"]
-  description = "CIDR block range for private DB subnets"
+  description = "CIDR block range for private subnets for database"
 }
 
 variable "availability-zones" {
-  type    = list(string)
-  default = ["us-east-1a", "us-east-1b"]
+  type        = list(string)
+  default     = ["us-east-1a", "us-east-1b"]
   description = "List of availability zones for selected region"
 }
 
-variable "instance_types" {
-  type    = list(string)
-  default = ["t3.small"]
-  description = "Instance types for EC2 instances"
+variable "instance_type" {
+  type        = string
+  default     = "t3.small"
+  description = "Instance type for EC2 instances"
 }
 
 variable "ami_id" {
+  type        = string
   description = "AMI ID for EC2 instances"
+}
+
+variable "key_name" {
   type        = string
-  default     = "ami-0abcdef1234567890" # Update this with a valid AMI ID
-}
-
-variable "disk_size" {
-  description = "Disk size in GiB for nodes"
-  type        = number
-  default     = 8
-}
-
-variable "desired_size" {
-  description = "Desired number of instances"
-  type        = number
-  default     = 1
-}
-
-variable "max_size" {
-  description = "Maximum number of instances"
-  type        = number
-  default     = 2
-}
-
-variable "min_size" {
-  description = "Minimum number of instances"
-  type        = number
-  default     = 1
-}
-
-variable "cluster-name" {
-  description = "Cluster name"
-  type        = string
-  default     = "terraform-cluster"
-}
-
-variable "region" {
-  type    = string
-  default = "us-east-1"
+  description = "Key pair name for SSH access to EC2 instances"
 }
 
 # VPC
@@ -100,7 +76,7 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
 
   tags = {
-    Name = "${var.cluster-name}-vpc"
+    Name = "k8s-vpc"
   }
 }
 
@@ -109,42 +85,44 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "${var.cluster-name}-igw"
+    Name = "k8s-igw"
   }
 }
 
-# Subnets
+# Public Subnets
 resource "aws_subnet" "public" {
-  count                   = length(var.public-subnet-cidr-blocks)
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public-subnet-cidr-blocks[count.index]
-  availability_zone       = var.availability-zones[count.index]
+  count             = length(var.public-subnet-cidr-blocks)
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = element(var.public-subnet-cidr-blocks, count.index)
+  availability_zone = element(var.availability-zones, count.index)
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.cluster-name}-public-subnet"
+    Name = "k8s-public-subnet-${count.index}"
   }
 }
 
+# Private Subnets (App)
 resource "aws_subnet" "private_app" {
   count             = length(var.private-subnet-cidr-blocks-app)
   vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private-subnet-cidr-blocks-app[count.index]
-  availability_zone = var.availability-zones[count.index]
+  cidr_block        = element(var.private-subnet-cidr-blocks-app, count.index)
+  availability_zone = element(var.availability-zones, count.index)
 
   tags = {
-    Name = "${var.cluster-name}-private-subnet-app"
+    Name = "k8s-private-app-subnet-${count.index}"
   }
 }
 
+# Private Subnets (DB)
 resource "aws_subnet" "private_db" {
   count             = length(var.private-subnet-cidr-blocks-db)
   vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private-subnet-cidr-blocks-db[count.index]
-  availability_zone = var.availability-zones[count.index]
+  cidr_block        = element(var.private-subnet-cidr-blocks-db, count.index)
+  availability_zone = element(var.availability-zones, count.index)
 
   tags = {
-    Name = "${var.cluster-name}-private-subnet-db"
+    Name = "k8s-private-db-subnet-${count.index}"
   }
 }
 
@@ -158,79 +136,30 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "${var.cluster-name}-public-rt"
+    Name = "k8s-public-rt"
   }
 }
 
 resource "aws_route_table_association" "public" {
   count          = length(var.public-subnet-cidr-blocks)
-  subnet_id      = aws_subnet.public[count.index].id
+  subnet_id      = element(aws_subnet.public[*].id, count.index)
   route_table_id = aws_route_table.public.id
-}
-
-resource "aws_eip" "nat" {
-  vpc = true
-
-  tags = {
-    Name = "${var.cluster-name}-eip"
-  }
-}
-
-resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
-
-  tags = {
-    Name = "${var.cluster-name}-nat"
-  }
-}
-
-resource "aws_route_table" "private_app" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id
-  }
-
-  tags = {
-    Name = "${var.cluster-name}-private-app-rt"
-  }
-}
-
-resource "aws_route_table_association" "private_app" {
-  count          = length(var.private-subnet-cidr-blocks-app)
-  subnet_id      = aws_subnet.private_app[count.index].id
-  route_table_id = aws_route_table.private_app.id
-}
-
-resource "aws_route_table" "private_db" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id
-  }
-
-  tags = {
-    Name = "${var.cluster-name}-private-db-rt"
-  }
-}
-
-resource "aws_route_table_association" "private_db" {
-  count          = length(var.private-subnet-cidr-blocks-db)
-  subnet_id      = aws_subnet.private_db[count.index].id
-  route_table_id = aws_route_table.private_db.id
 }
 
 # Security Groups
 resource "aws_security_group" "public" {
   vpc_id = aws_vpc.main.id
-  name   = "${var.cluster-name}-public-sg"
 
   ingress {
-    from_port   = 0
-    to_port     = 0
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 6443
+    to_port     = 6443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -243,19 +172,18 @@ resource "aws_security_group" "public" {
   }
 
   tags = {
-    Name = "${var.cluster-name}-public-sg"
+    Name = "k8s-public-sg"
   }
 }
 
 resource "aws_security_group" "private" {
   vpc_id = aws_vpc.main.id
-  name   = "${var.cluster-name}-private-sg"
 
   ingress {
     from_port   = 0
     to_port     = 0
-    protocol    = "tcp"
-    cidr_blocks = concat(var.private-subnet-cidr-blocks-app, var.private-subnet-cidr-blocks-db)
+    protocol    = "-1"
+    cidr_blocks = ["10.0.0.0/16"]
   }
 
   egress {
@@ -266,39 +194,73 @@ resource "aws_security_group" "private" {
   }
 
   tags = {
-    Name = "${var.cluster-name}-private-sg"
+    Name = "k8s-private-sg"
   }
 }
 
-# EC2 Instances
-resource "aws_instance" "app" {
-  count         = var.desired_size
-  ami           = var.ami_id
-  instance_type = var.instance_types[0]
-  subnet_id     = aws_subnet.private_app[count.index % length(aws_subnet.private_app)].id
-  key_name      = var.key_name # Assuming you have a key_name variable
-
-  vpc_security_group_ids = [aws_security_group.private.id]
-
-  root_block_device {
-    volume_size = var.disk_size
-    volume_type = "gp2"
-  }
+# EC2 Instances for Kubernetes Master
+resource "aws_instance" "master" {
+  count                  = var.create_instance ? 1 : 0
+  ami                    = var.ami_id
+  instance_type          = var.instance_type
+  key_name               = var.key_name
+  subnet_id              = element(aws_subnet.public[*].id, 0)
+  security_groups        = [aws_security_group.public.name]
 
   tags = {
-    Name = "${var.cluster-name}-app-instance"
+    Name = "k8s-master"
   }
+
+  user_data = <<-EOF
+              #!/bin/bash
+              apt-get update -y
+              apt-get install -y docker.io
+              systemctl enable docker.service
+              systemctl start docker.service
+              curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+              apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+              apt-get update -y
+              apt-get install -y kubelet kubeadm kubectl
+              kubeadm init --pod-network-cidr=10.244.0.0/16
+              mkdir -p /home/ubuntu/.kube
+              cp -i /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
+              chown ubuntu:ubuntu /home/ubuntu/.kube/config
+              export KUBECONFIG=/home/ubuntu/.kube/config
+              kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+              EOF
 }
 
-resource "aws_instance" "db" {
-  count         = var.desired_size
-  ami           = var.ami_id
-  instance_type = var.instance_types[0]
-  subnet_id     = aws_subnet.private_db[count.index % length(aws_subnet.private_db)].id
-  key_name      = var.key_name # Assuming you have a key_name variable
+# EC2 Instances for Kubernetes Workers
+resource "aws_instance" "worker" {
+  count                  = var.create_instance ? 1 : 0
+  ami                    = var.ami_id
+  instance_type          = var.instance_type
+  key_name               = var.key_name
+  subnet_id              = element(aws_subnet.private_app[*].id, count.index)
+  security_groups        = [aws_security_group.private.name]
 
-  vpc_security_group_ids = [aws_security_group.private.id]
+  tags = {
+    Name = "k8s-worker-${count.index}"
+  }
 
-  root_block_device {
-    volume_size = var.disk_size
-    volume_type
+  user_data = <<-EOF
+              #!/bin/bash
+              apt-get update -y
+              apt-get install -y docker.io
+              systemctl enable docker.service
+              systemctl start docker.service
+              curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+              apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+              apt-get update -y
+              apt-get install -y kubelet kubeadm kubectl
+              EOF
+}
+
+# Outputs
+output "master_public_ip" {
+  value = aws_instance.master.public_ip
+}
+
+output "worker_private_ips" {
+  value = [for instance in aws_instance.worker : instance.private_ip]
+}
