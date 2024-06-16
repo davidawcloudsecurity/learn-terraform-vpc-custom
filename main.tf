@@ -24,10 +24,8 @@ variable "create_instance" {
 }
 
 variable "user_tags" {
-  description = "User-provided tags for resource name."
-  default     = {
-    "Name"        = "default-name"   
-  }
+  description = "Please provide name for your project."
+  type    = string 
 }
 
 variable "resource_tags" {
