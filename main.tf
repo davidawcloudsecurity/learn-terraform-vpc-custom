@@ -258,11 +258,9 @@ resource "aws_instance" "worker" {
 
 # Outputs
 output "master_public_ip" {
-  count                  = var.create_instance ? 1 : 0
   value = aws_instance.master.public_ip
 }
 
 output "worker_private_ips" {
-  count                  = var.create_instance ? 1 : 0
   value = [for instance in aws_instance.worker : instance.private_ip]
 }
