@@ -18,8 +18,20 @@ variable "region" {
   default = "us-east-1"
 }
 
-variable "create_instance" {
-  description = "Flag to create the instance"
+variable "create_instance_vm_linux" {
+  description = "Flag to create the linux instance"
+  type        = bool
+  default     = false
+}
+
+variable "create_instance_vm_windows" {
+  description = "Flag to create the windows instance"
+  type        = bool
+  default     = false
+}
+
+variable "create_instance_pod" {
+  description = "Flag to create the pod instance"
   type        = bool
   default     = false
 }
@@ -39,49 +51,54 @@ variable "resource_tags" {
 }
 
 variable "vpc-cidr-block" {
+  description = "CIDR block range for VPC"
   type        = string
   default     = "10.0.0.0/16"
-  description = "CIDR block range for VPC"
 }
 
 variable "public-subnet-cidr-blocks" {
+  description = "CIDR block range for public subnets"
   type        = list(string)
   default     = ["10.0.1.0/24", "10.0.2.0/24"]
-  description = "CIDR block range for public subnets"
 }
 
 variable "private-subnet-cidr-blocks-app" {
+  description = "CIDR block range for private subnets for app"
   type        = list(string)
   default     = ["10.0.3.0/24", "10.0.4.0/24"]
-  description = "CIDR block range for private subnets for app"
 }
 
 variable "private-subnet-cidr-blocks-db" {
+  description = "CIDR block range for private subnets for database"
   type        = list(string)
   default     = ["10.0.5.0/24", "10.0.6.0/24"]
-  description = "CIDR block range for private subnets for database"
 }
 
 variable "availability-zones" {
+  description = "List of availability zones for selected region"
   type        = list(string)
   default     = ["us-east-1a", "us-east-1b"]
-  description = "List of availability zones for selected region"
 }
 
 variable "instance_type" {
-  type        = string
-  default     = "t3.small"
   description = "Instance type for EC2 instances"
+  type        = string
+  default     = "t2.nano"
 }
 
-variable "ami_id" {
-  type        = string
+variable "ami_id_vm" {
   description = "AMI ID for EC2 instances"
+  type        = string
+}
+
+variable "ami_id_pod" {
+  description = "AMI ID for EC2 instances"
+  type        = string
 }
 
 variable "key_name" {
-  type        = string
   description = "Key pair name for SSH access to EC2 instances"
+  type        = string
 }
 
 # VPC
@@ -218,8 +235,8 @@ resource "aws_security_group" "public" {
   }
 
   ingress {
-    from_port   = 6443
-    to_port     = 6443
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -258,12 +275,55 @@ resource "aws_security_group" "private" {
   }
 }
 
+# EC2 Instance for Web Server (Linux)
+resource "aws_instance" "web" {
+  count                  = var.create_instance_vm_linux ? 1 : 0
+  ami                    = var.ami_id_vm_linux
+  instance_type          = var.instance_type
+  key_name               = var.key_name
+  subnet_id              = element(aws_subnet.public[*].id, 0)  # Using the first public subnet
+  security_groups        = [aws_security_group.public.name]
+  associate_public_ip_address = true
+
+  tags = {
+    Name = "${var.user_tags}-web"
+  }
+
+  user_data = <<-EOF
+              #!/bin/bash
+              apt-get update -y
+              apt-get install -y nginx
+              systemctl start nginx
+              EOF
+}
+
+# EC2 Instance for Windows Server
+resource "aws_instance" "windows" {
+  count                  = var.create_instance_vm_windows ? 1 : 0
+  ami                    = var.ami_id_vm_windows
+  instance_type          = var.instance_type
+  key_name               = var.key_name
+  subnet_id              = element(aws_subnet.public[*].id, 1)  # Using the second public subnet
+  security_groups        = [aws_security_group.public.name]
+  associate_public_ip_address = true
+
+  tags = {
+    Name = "${var.user_tags}-windows"
+  }
+
+  user_data = <<-EOF
+              <powershell>
+              Install-WindowsFeature -Name Web-Server
+              </powershell>
+              EOF
+}
+
 # Skip this as it is kubernetes
 /*
 # EC2 Instances for Kubernetes Master
 resource "aws_instance" "master" {
-  count           = var.create_instance ? 1 : 0
-  ami             = var.ami_id
+  count           = var.create_instance_pod ? 1 : 0
+  ami             = var.ami_id_pod
   instance_type   = var.instance_type
   key_name        = var.key_name
   subnet_id       = element(aws_subnet.public[*].id, 0)
@@ -294,8 +354,8 @@ resource "aws_instance" "master" {
 
 # EC2 Instances for Kubernetes Workers
 resource "aws_instance" "worker" {
-  count           = var.create_instance ? 1 : 0
-  ami             = var.ami_id
+  count           = var.create_instance_pod ? 1 : 0
+  ami             = var.ami_id_pod
   instance_type   = var.instance_type
   key_name        = var.key_name
   subnet_id       = element(aws_subnet.private_app[*].id, count.index)
