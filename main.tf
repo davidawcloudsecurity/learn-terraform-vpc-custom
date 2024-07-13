@@ -1,3 +1,4 @@
+#3 tier web architecture VPC
 provider "aws" {
   region = var.region
 }
