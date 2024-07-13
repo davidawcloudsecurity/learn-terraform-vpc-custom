@@ -235,6 +235,8 @@ resource "aws_route_table_association" "private_db" {
 
 # Security Groups
 resource "aws_security_group" "public" {
+  name        = "web-facing-sg
+  description = "Allow traffic from internet"
   vpc_id = aws_vpc.main.id
 
   ingress {
@@ -264,6 +266,8 @@ resource "aws_security_group" "public" {
 }
 
 resource "aws_security_group" "private" {
+  name        = "private-facing-sg"
+  description = "Allow traffic within vpc"
   vpc_id = aws_vpc.main.id
 
   ingress {
