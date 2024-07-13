@@ -292,7 +292,9 @@ resource "aws_instance" "web" {
   instance_type          = var.instance_type
   key_name               = var.key_name
   subnet_id              = element(aws_subnet.public[*].id, 0)  # Using the first public subnet
-  security_groups        = [aws_security_group.public.name]
+  vpc_security_group_ids = [
+    aws_security_group.public.id # public-facing-security-group
+  ]
   associate_public_ip_address = true
 
   tags = {
@@ -343,7 +345,9 @@ resource "aws_instance" "windows" {
   instance_type          = var.instance_type
   key_name               = var.key_name
   subnet_id              = element(aws_subnet.public[*].id, 1)  # Using the second public subnet
-  security_groups        = [aws_security_group.public.name]
+  vpc_security_group_ids = [
+    aws_security_group.public.id # public-facing-security-group
+  ]
   associate_public_ip_address = true
 
   tags = {
