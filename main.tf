@@ -84,7 +84,7 @@ variable "availability-zones" {
 variable "instance_type" {
   description = "Instance type for EC2 instances"
   type        = string
-  default     = "t2.nano"
+  default     = "t2.micro"
 }
 
 variable "ami_id_vm_linux" {
