@@ -257,6 +257,8 @@ resource "aws_security_group" "private" {
   }
 }
 
+# Skip this as it is kubernetes
+/*
 # EC2 Instances for Kubernetes Master
 resource "aws_instance" "master" {
   count           = var.create_instance ? 1 : 0
@@ -314,3 +316,4 @@ resource "aws_instance" "worker" {
               apt-get install -y kubelet kubeadm kubectl
               EOF
 }
+*/
