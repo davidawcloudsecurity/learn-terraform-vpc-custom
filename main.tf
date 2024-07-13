@@ -21,7 +21,7 @@ variable "region" {
 variable "create_instance_vm_linux" {
   description = "Flag to create the linux instance"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "create_instance_vm_windows" {
