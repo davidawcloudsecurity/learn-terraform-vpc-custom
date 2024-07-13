@@ -107,6 +107,7 @@ variable "ami_id_pod" {
 variable "key_name" {
   description = "Key pair name for SSH access to EC2 instances"
   type        = string
+  default     = ""
 }
 
 # VPC
