@@ -403,7 +403,7 @@ resource "aws_flow_log" "linux_flow_log" {
 
   log_group_name = aws_cloudwatch_log_group.flow_logs[count.index].name
   iam_role_arn   = aws_iam_role.flow_logs_role.arn
-  eni_id         = element(aws_instance.vm_linux[*].network_interface.0.network_interface_id, count.index)
+  eni_id         = element(aws_instance.web[*].network_interface.0.network_interface_id, count.index)
   traffic_type   = "ALL"
 
   depends_on = [
