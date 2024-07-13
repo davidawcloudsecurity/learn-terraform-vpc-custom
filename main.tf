@@ -37,8 +37,9 @@ variable "create_instance_pod" {
 }
 
 variable "user_tags" {
-  description = "Please provide name for your project."
-  type    = string 
+  description = "Please provide a name for your project. It will also be used to tag resources"
+  type        = string
+  default     = example-01
 }
 
 variable "resource_tags" {
