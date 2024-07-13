@@ -249,6 +249,7 @@ resource "aws_security_group" "public" {
 
   ingress {
     description = "Allow HTTPS access from anywhere"
+    name        = "Test"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
