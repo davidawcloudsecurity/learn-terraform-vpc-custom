@@ -86,14 +86,22 @@ variable "instance_type" {
   default     = "t2.nano"
 }
 
-variable "ami_id_vm" {
-  description = "AMI ID for EC2 instances"
+variable "ami_id_vm_linux" {
+  description = "AMI ID for EC2 instances Linux"
   type        = string
+  default     = "ami-01fccab91b456acc2" # linux2 AWS
+}
+
+variable "ami_id_vm_windows" {
+  description = "AMI ID for EC2 instances Windows"
+  type        = string
+  default     = "ami-016a78934c9cfa396" # windows 2019 base
 }
 
 variable "ami_id_pod" {
-  description = "AMI ID for EC2 instances"
+  description = "AMI ID for EC2 instances pods"
   type        = string
+  default     = "ami-01fccab91b456acc2" # linux2 AWS
 }
 
 variable "key_name" {
