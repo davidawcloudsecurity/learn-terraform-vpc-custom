@@ -299,6 +299,51 @@ resource "aws_security_group" "private" {
   }
 }
 
+# IAM Role for Flow Logs
+resource "aws_iam_role" "flow_logs_role" {
+  name = "${var.user_tags}_flow_logs_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = {
+        Service = "vpc-flow-logs.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "flow_logs_policy" {
+  name   = "${var.user_tags}_flow_logs_policy"
+  role   = aws_iam_role.flow_logs_role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
+# CloudWatch Log Group for Flow Logs
+resource "aws_cloudwatch_log_group" "flow_logs" {
+  count = var.create_instance_vm_linux || var.create_instance_vm_windows || var.create_instance_pod ? 1 : 0
+
+  name = "${var.user_tags}-eni-flow-logs"
+  retention_in_days = 7
+
+  tags = {
+    Name = "${var.user_tags}-eni-flow-logs"
+  }
+}
+
 # EC2 Instance for Web Server (Linux)
 resource "aws_instance" "web" {
   count                  = var.create_instance_vm_linux ? 1 : 0
@@ -350,6 +395,21 @@ systemctl start httpd
 systemctl enable httpd
 echo "<h1>Hello From App Server! This is $(hostname -f)</h1>" > /var/www/html/index.html
 EOF
+}
+
+# Flow Log for Linux Instance
+resource "aws_flow_log" "linux_flow_log" {
+  count = var.create_instance_vm_linux ? 1 : 0
+
+  log_group_name = aws_cloudwatch_log_group.flow_logs[count.index].name
+  iam_role_arn   = aws_iam_role.flow_logs_role.arn
+  eni_id         = element(aws_instance.vm_linux[*].network_interface.0.network_interface_id, count.index)
+  traffic_type   = "ALL"
+
+  depends_on = [
+    aws_iam_role_policy.flow_logs_policy,
+    aws_cloudwatch_log_group.flow_logs
+  ]
 }
 
 # EC2 Instance for Windows Server
