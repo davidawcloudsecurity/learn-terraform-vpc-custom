@@ -235,11 +235,12 @@ resource "aws_route_table_association" "private_db" {
 
 # Security Groups
 resource "aws_security_group" "public" {
-  name        = "web-facing-sg"
   description = "Allow traffic from internet"
+  name        = "web-facing-sg"
   vpc_id = aws_vpc.main.id
 
   ingress {
+    description = "Allow SSH access from anywhere"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -247,6 +248,7 @@ resource "aws_security_group" "public" {
   }
 
   ingress {
+    description = "Allow HTTPS access from anywhere"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
