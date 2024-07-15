@@ -130,7 +130,7 @@ resource "aws_internet_gateway" "main" {
     Name = "${var.user_tags}-main-igw"
   }
 }
-
+/*
 # Elastic IP for NAT Gateway
 resource "aws_eip" "nat_eip" {
   vpc = true
@@ -150,7 +150,7 @@ resource "aws_nat_gateway" "main" {
   }
   depends_on = [aws_internet_gateway.main]
 }
-
+*/
 # Public Subnets
 resource "aws_subnet" "public" {
   count                   = length(var.public-subnet-cidr-blocks)
