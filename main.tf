@@ -21,13 +21,13 @@ variable "region" {
 variable "create_instance_vm_linux" {
   description = "Flag to create the linux instance"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "create_instance_vm_windows" {
   description = "Flag to create the windows instance"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "create_instance_pod" {
@@ -416,7 +416,7 @@ resource "aws_instance" "windows" {
   count                  = var.create_instance_vm_windows ? 1 : 0
   ami                    = var.ami_id_vm_windows
   instance_type          = var.instance_type
-  key_name               = var.key_name
+#  key_name               = var.key_name
   subnet_id              = element(aws_subnet.public[*].id, 1)  # Using the second public subnet
   vpc_security_group_ids = [
     aws_security_group.public.id # public-facing-security-group
@@ -428,10 +428,13 @@ resource "aws_instance" "windows" {
   }
 
   user_data = <<-EOF
-              <powershell>
-              Install-WindowsFeature -Name Web-Server
-              </powershell>
-              EOF
+<script>
+net users user2 P@ssw0rd123 /add
+net users admin2 P@ssw0rd123 /add
+net localgroup "Remote Desktop Users" user2 /add
+net localgroup Administrators admin2 /add
+</script>
+EOF
 }
 
 # Skip this as it is kubernetes
