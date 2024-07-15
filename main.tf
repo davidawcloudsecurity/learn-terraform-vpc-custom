@@ -442,6 +442,13 @@ net users admin2 P@ssw0rd123 /add
 net localgroup "Remote Desktop Users" user2 /add
 net localgroup Administrators admin2 /add
 </script>
+<powershell>
+[Net.ServicePointManager]::SecurityProtocol = "tls12, tls11, tls"
+md -Path $env:temp\edgeinstall -erroraction SilentlyContinue | Out-Null
+$Download = join-path $env:temp\edgeinstall MicrosoftEdgeEnterpriseX64.msi
+Invoke-WebRequest 'http://go.microsoft.com/fwlink/?LinkID=2093437'  -OutFile $Download
+Start-Process "$Download" -ArgumentList "/quiet"
+</powershell>
 EOF
 }
 
