@@ -400,7 +400,7 @@ EOF
 # Flow Log for Linux Instance
 resource "aws_flow_log" "linux_flow_log" {
   count = var.create_instance_vm_linux ? 1 : 0
-  log_group_name = aws_cloudwatch_log_group.flow_logs[count.index].name
+  log_destination = aws_cloudwatch_log_group.flow_logs[count.index].name
   iam_role_arn   = aws_iam_role.flow_logs_role.arn
   traffic_type   = "ALL"
   vpc_id               = aws_vpc.main.id
